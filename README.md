@@ -6,7 +6,7 @@
 
 - 公开仓库：https://github.com/PikachuGits/s4-e2e-019-opportunity-closure
 - 默认分支：`main`（提交号以仓库页面为准，文档不固定引用，避免与仓库漂移）
-- 本次运行：`25 passed`（SQLite 与 PostgreSQL 16.16 各跑一遍），覆盖率以对应报告为准
+- 本次运行：`33 passed`（SQLite 与 PostgreSQL 16.16 各跑一遍），覆盖率以对应报告为准
 - 报告：`evidence/test-results.txt`（SQLite，87%–88%）、`evidence/test-results-postgres.txt`（PostgreSQL 16.16，86%）；`--cov=app`、`branch = true`，截图用例在子进程里执行，统计边界会让数值在 86%–88% 间波动，正文不写死固定值
 
 > **边界声明（先读）**
@@ -62,12 +62,13 @@ alembic upgrade head
 ./scripts/test.sh
 ```
 
-夹具内置三条护栏（`tests/conftest.py::_assert_isolated_pg`）：只接受 `postgresql://`；host 必须是
-`127.0.0.1`/`localhost`/`::1`；库名必须含 `test` 或 `e2e`。任一不满足直接失败，不会连到共享库。
+夹具内置三条护栏（`tests/conftest.py::_assert_isolated_pg`）：只接受 `postgresql://`；host 必须**显式写**为
+`127.0.0.1`/`localhost`/`::1`（省略 host 会走 Unix socket、无法区分本机与远程，一律拒绝）；库名必须含
+`test` 或 `e2e`。任一不满足直接失败，不会连到共享库。护栏本身由 8 条用例覆盖（`tests/test_isolation_guard.py`）。
 
 **本次实测**（2026-11-18）：PostgreSQL 16.16（Homebrew，独立 cluster，端口 55433，数据库
 `opportunity_e2e_test`）→ `alembic upgrade head` 建 6 张表（5 业务表 + `alembic_version`）→
-**25 passed，覆盖率 86%**。SQLite 路径同期 25 passed / 87%–88%（截图用例在子进程，覆盖率随进程边界小幅波动，以报告为准）。
+**33 passed，覆盖率 86%**。SQLite 路径同期 33 passed / 87%–88%（截图用例在子进程，覆盖率随进程边界小幅波动，以报告为准）。
 
 ---
 
@@ -80,12 +81,13 @@ alembic upgrade head
 | `tests/test_e2e_lost_requires_reason.py` | AC-3 未成交关闭必须选原因 |
 | `tests/test_e2e_demand_fulfilled.py` | AC-4 需求 fulfilled 且广场下架 + 转化率 |
 | `tests/test_e2e_waterfall_screenshot.py` | Playwright 截图 |
+| `tests/test_isolation_guard.py` | 夹具隔离护栏自测（拒绝远程 / 缺 host / 非 PG） |
 | `tests/conftest.py` | 夹具：每例独立清库，并用夹具构造「已举行的对接」前置数据 |
 | `app/` | S3-MATCH 接口桩 + 商机闭环参考实现（仅用于让用例可运行） |
 | `alembic/versions/0001_opportunity_closure_chain.py` | 表结构迁移（5 张表，含软删除与租户字段） |
 | `docs/screenshots/waterfall.png` | 瀑布流页面截图（虚构数据） |
-| `evidence/test-results.txt` | SQLite 路径运行报告（`25 passed`，绝对路径已脱敏为 `.`） |
-| `evidence/test-results-postgres.txt` | PostgreSQL 16.16 路径运行报告（`25 passed`，覆盖率 86%） |
+| `evidence/test-results.txt` | SQLite 路径运行报告（`33 passed`，绝对路径已脱敏为 `.`） |
+| `evidence/test-results-postgres.txt` | PostgreSQL 16.16 路径运行报告（`33 passed`，覆盖率 86%） |
 | `docker-compose.test.yml` | PG16（pgvector）+ Redis 7，仅绑定 127.0.0.1 |
 
 ---

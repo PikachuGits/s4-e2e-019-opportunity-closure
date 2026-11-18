@@ -5,13 +5,14 @@ configfile: pyproject.toml
 testpaths: tests
 plugins: cov-6.0.0, asyncio-0.25.0, anyio-4.16.0
 asyncio: mode=Mode.AUTO, asyncio_default_fixture_loop_scope=function
-collected 25 items
+collected 33 items
 
-tests/test_e2e_demand_fulfilled.py ..                                    [  8%]
-tests/test_e2e_lost_requires_reason.py .....                             [ 28%]
-tests/test_e2e_no_fund_fields.py .............                           [ 80%]
-tests/test_e2e_opportunity_audit.py ....                                 [ 96%]
-tests/test_e2e_waterfall_screenshot.py .                                 [100%]
+tests/test_e2e_demand_fulfilled.py ..                                    [  6%]
+tests/test_e2e_lost_requires_reason.py .....                             [ 21%]
+tests/test_e2e_no_fund_fields.py .............                           [ 60%]
+tests/test_e2e_opportunity_audit.py ....                                 [ 72%]
+tests/test_e2e_waterfall_screenshot.py .                                 [ 75%]
+tests/test_isolation_guard.py ........                                   [100%]
 
 --------- coverage: platform darwin, python 3.12.13-final-0 ----------
 Name                Stmts   Miss Branch BrPart  Cover   Missing
@@ -31,4 +32,4 @@ app/service.py        135     16     44     13    84%   70, 116, 118, 120, 157, 
 TOTAL                 489     52     76     19    86%
 
 
-============================= 25 passed in 13.57s ==============================
+============================= 33 passed in 13.67s ==============================

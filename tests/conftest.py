@@ -26,7 +26,12 @@ def _assert_isolated_pg(url: str) -> None:
     parsed = make_url(url)
     if not parsed.drivername.startswith("postgresql"):
         raise RuntimeError("TEST_DATABASE_URL 只接受 postgresql:// 连接串")
-    if parsed.host not in (None, "127.0.0.1", "localhost", "::1"):
+    if not parsed.host:
+        raise RuntimeError(
+            "TEST_DATABASE_URL 必须显式写主机地址（如 127.0.0.1）；"
+            "省略 host 会走 Unix socket，无法区分本机与远程，按拒绝处理"
+        )
+    if parsed.host not in ("127.0.0.1", "localhost", "::1"):
         raise RuntimeError(f"拒绝对非本机数据库运行测试: host={parsed.host}")
     database = (parsed.database or "").lower()
     if "test" not in database and "e2e" not in database:
