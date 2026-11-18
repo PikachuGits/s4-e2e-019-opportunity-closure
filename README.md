@@ -5,8 +5,9 @@
 并附 Playwright 瀑布流页面截图、运行报告与 README。
 
 - 公开仓库：https://github.com/PikachuGits/s4-e2e-019-opportunity-closure
-- 默认分支：`main`，首版提交 `7759cef`
-- 本次运行：`25 passed`，覆盖率以 `evidence/test-results.txt` 为准（`--cov=app`、`branch = true`；截图用例在子进程里执行，统计边界可能让数值在 87%–88% 间波动，正文不写死）
+- 默认分支：`main`（提交号以仓库页面为准，文档不固定引用，避免与仓库漂移）
+- 本次运行：`25 passed`（SQLite 与 PostgreSQL 16.16 各跑一遍），覆盖率以对应报告为准
+- 报告：`evidence/test-results.txt`（SQLite，87%–88%）、`evidence/test-results-postgres.txt`（PostgreSQL 16.16，86%）；`--cov=app`、`branch = true`，截图用例在子进程里执行，统计边界会让数值在 86%–88% 间波动，正文不写死固定值
 
 > **边界声明（先读）**
 >
@@ -24,7 +25,7 @@
 | 验收标准（原文） | 用例文件 | 可观察断言 |
 |---|---|---|
 | ① 阶段推进留痕条数等于推进次数 | `tests/test_e2e_opportunity_audit.py` | 推进 3 次 → `stage_history` 恰 3 条；`sequence=1..3`；每条含 `operator_id`、`occurred_at`（带时区）、`from_stage`/`to_stage`；相邻记录首尾相接；重复推进 / 跨阶段推进 / 并发推进均不增加留痕 |
-| ② 提交收付款类字段返回 422 | `tests/test_e2e_no_fund_fields.py` | `amount_paid`、`payment_account`、`paid_amount`、`received_amount` 等（含嵌套对象、数组元素、camelCase 变体）一律 **422 + `FUND_FIELDS_FORBIDDEN`**；合法请求 201 且响应只含 4 个统计字段；`opportunity_deal_records` 表不存在任何收付款列 |
+| ② 提交收付款类字段返回 422 | `tests/test_e2e_no_fund_fields.py` | `amount_paid`、`payment_account`、`paid_amount`、`received_amount` 等（含嵌套对象、数组元素、camelCase 变体）一律 **422 + `FUND_FIELDS_FORBIDDEN`**；合法请求 201 且响应只含 4 个统计字段；`test_physical_table_schema_has_no_fund_columns` 在建表后用 `inspect()` 读物理 schema（SQLite 下另查 DDL 文本），证明资金列在数据库层面也不存在 |
 | ③ 未选择原因的未成交关闭被拒绝 | `tests/test_e2e_lost_requires_reason.py` | `outcome=lost` 且无 `reason` / 空串 / 纯空格 → **422 + `LOST_REASON_REQUIRED`**，商机仍 `open`、`close_reason` 为空；带原因 → 200 且写入 `close_reason`；关闭后推进被 409 拒绝 |
 | ④ 需求状态 fulfilled，需求广场查不到 | `tests/test_e2e_demand_fulfilled.py` | 走完成交闭环后：`GET /api/v1/demands/{id}` → `status=fulfilled`；`GET /api/v1/demands` 列表不含该需求；`?include_all=true`（管理与审计视角）仍可读到，避免「查不到 = 数据丢失」 |
 | 范围补充：商机转化率统计接口更新 | `tests/test_e2e_demand_fulfilled.py::test_conversion_rate_updates_after_won_and_lost` | 成交 1 个 + 在途 1 个 → `{"won":1,"total":2,"conversion_rate":0.5}`（成交商机 ÷ 商机总数） |
@@ -48,18 +49,25 @@ python -m playwright install chromium     # 仅截图用例需要
 - 不开 `AUTO_CREATE_SCHEMA` 时改用 Alembic：`alembic upgrade head`（迁移脚本 `alembic/versions/0001_*.py`）。
 - 截图用例在缺少 Playwright / 浏览器时**跳过**；跳过不算通过，报告里会标注 skip 原因。
 
-### 2.2 PostgreSQL 16 + Redis（集成口径）
+### 2.2 PostgreSQL 16（已实跑，见 `evidence/test-results-postgres.txt`）
+
+数据库由 Alembic 建表，测试夹具**不会**在 PG 上 `create_all`。必须显式给出隔离测试库 URL：
 
 ```bash
-docker compose -f docker-compose.test.yml up -d
-export DATABASE_URL='postgresql+psycopg://e2e:e2e@127.0.0.1:55432/opportunity_e2e'
+docker compose -f docker-compose.test.yml up -d            # 或任意本机 PG16
+export TEST_DATABASE_URL='postgresql+psycopg://e2e:e2e@127.0.0.1:55432/opportunity_e2e_test'
+export DATABASE_URL="$TEST_DATABASE_URL"                   # alembic 复用同一 URL
 export AUTO_CREATE_SCHEMA=0
 alembic upgrade head
 ./scripts/test.sh
 ```
 
-> 本次交付证据在 SQLite 上产出（交付环境无 Docker）。用例与迁移脚本不使用 SQLite 专有语法，
-> 但**本仓库不声称已在 PostgreSQL 上运行过**；接入方需在 PG 上复跑一次并以其结果为准。
+夹具内置三条护栏（`tests/conftest.py::_assert_isolated_pg`）：只接受 `postgresql://`；host 必须是
+`127.0.0.1`/`localhost`/`::1`；库名必须含 `test` 或 `e2e`。任一不满足直接失败，不会连到共享库。
+
+**本次实测**（2026-11-18）：PostgreSQL 16.16（Homebrew，独立 cluster，端口 55433，数据库
+`opportunity_e2e_test`）→ `alembic upgrade head` 建 6 张表（5 业务表 + `alembic_version`）→
+**25 passed，覆盖率 86%**。SQLite 路径同期 25 passed / 87%–88%（截图用例在子进程，覆盖率随进程边界小幅波动，以报告为准）。
 
 ---
 
@@ -76,7 +84,8 @@ alembic upgrade head
 | `app/` | S3-MATCH 接口桩 + 商机闭环参考实现（仅用于让用例可运行） |
 | `alembic/versions/0001_opportunity_closure_chain.py` | 表结构迁移（5 张表，含软删除与租户字段） |
 | `docs/screenshots/waterfall.png` | 瀑布流页面截图（虚构数据） |
-| `evidence/test-results.txt` | 本次运行报告（`25 passed`，覆盖率以报告为准；绝对路径已脱敏为 `.`） |
+| `evidence/test-results.txt` | SQLite 路径运行报告（`25 passed`，绝对路径已脱敏为 `.`） |
+| `evidence/test-results-postgres.txt` | PostgreSQL 16.16 路径运行报告（`25 passed`，覆盖率 86%） |
 | `docker-compose.test.yml` | PG16（pgvector）+ Redis 7，仅绑定 127.0.0.1 |
 
 ---
@@ -167,6 +176,6 @@ Readme 中「假设与待确认项」同时就是对接清单。
 
 ## 9. 已知限制
 
-- 交付环境没有 Docker，证据在 SQLite 上产出；PostgreSQL 16 路径已提供但未在本环境实际跑过（见 2.2）。
+- PostgreSQL 路径已实际运行（16.16，独立 cluster，见 §2.2 与 `evidence/test-results-postgres.txt`）；若客户环境是 16.x 的其他小版本，迁移与断言逻辑不变，仍建议在目标库复跑一次。
 - 截图用例起真实 uvicorn 进程（约 3 秒）；CI 未安装浏览器时会 skip，报告会标注。
-- 覆盖率以 `evidence/test-results.txt` 为准（`branch = true`，口径 `--cov=app`）：截图用例在子进程运行，覆盖率统计随进程边界在 87%–88% 间波动，正文不固定引用某一个数值；`main.py` 的 HTML 渲染分支同样由子进程覆盖，未计入主进程统计。
+- 覆盖率以两份报告为准（`branch = true`，口径 `--cov=app`）：SQLite 87%–88%、PostgreSQL 86%（PG 走真实 schema，SQLite 专有的 DDL 文本断言分支不执行）；截图用例在子进程运行，统计随进程边界波动，正文不固定引用单一数值。

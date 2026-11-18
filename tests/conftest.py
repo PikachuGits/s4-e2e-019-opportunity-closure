@@ -18,8 +18,37 @@ from httpx import ASGITransport, AsyncClient
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+def _assert_isolated_pg(url: str) -> None:
+    """Refuse anything that is not an explicitly namespaced local test database."""
+
+    from sqlalchemy.engine import make_url
+
+    parsed = make_url(url)
+    if not parsed.drivername.startswith("postgresql"):
+        raise RuntimeError("TEST_DATABASE_URL 只接受 postgresql:// 连接串")
+    if parsed.host not in (None, "127.0.0.1", "localhost", "::1"):
+        raise RuntimeError(f"拒绝对非本机数据库运行测试: host={parsed.host}")
+    database = (parsed.database or "").lower()
+    if "test" not in database and "e2e" not in database:
+        raise RuntimeError(f"库名必须含 test/e2e，避免误连共享库: {parsed.database}")
+
+
 @pytest.fixture(scope="session")
 def database_url(tmp_path_factory) -> str:
+    """Explicit TEST_DATABASE_URL wins (PostgreSQL path); otherwise throw-away SQLite.
+
+    The PostgreSQL path is expected to be migrated first (``alembic upgrade head``);
+    the suite never creates schema on it.
+    """
+
+    explicit = os.getenv("TEST_DATABASE_URL")
+    if explicit:
+        _assert_isolated_pg(explicit)
+        os.environ["DATABASE_URL"] = explicit
+        os.environ["SEED_DEMO_DATA"] = "0"
+        os.environ["AUTO_CREATE_SCHEMA"] = os.getenv("AUTO_CREATE_SCHEMA", "0")
+        return explicit
+
     db_file = tmp_path_factory.mktemp("db") / "e2e.sqlite3"
     url = f"sqlite+pysqlite:///{db_file}"
     os.environ["DATABASE_URL"] = url
@@ -33,7 +62,9 @@ def app(database_url):
     from app.main import app as fastapi_app
     from app.db import init_schema
 
-    init_schema()
+    if not os.getenv("TEST_DATABASE_URL"):
+        # PostgreSQL path is migrated by the caller (alembic upgrade head)
+        init_schema()
     return fastapi_app
 
 
