@@ -1,0 +1,34 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-8.3.4, pluggy-1.7.0
+rootdir: .
+configfile: pyproject.toml
+testpaths: tests
+plugins: cov-6.0.0, asyncio-0.25.0, anyio-4.16.0
+asyncio: mode=Mode.AUTO, asyncio_default_fixture_loop_scope=function
+collected 25 items
+
+tests/test_e2e_demand_fulfilled.py ..                                    [  8%]
+tests/test_e2e_lost_requires_reason.py .....                             [ 28%]
+tests/test_e2e_no_fund_fields.py .............                           [ 80%]
+tests/test_e2e_opportunity_audit.py ....                                 [ 96%]
+tests/test_e2e_waterfall_screenshot.py .                                 [100%]
+
+--------- coverage: platform darwin, python 3.12.13-final-0 ----------
+Name                Stmts   Miss Branch BrPart  Cover   Missing
+---------------------------------------------------------------
+app/__init__.py         0      0      0      0   100%
+app/config.py           9      0      0      0   100%
+app/db.py              41      8      8      4    76%   17->exit, 19->exit, 21->exit, 29->31, 52-60
+app/errors.py          22      0      0      0   100%
+app/fund_guard.py      18      0     10      0   100%
+app/identity.py        14      1      2      1    88%   40
+app/main.py            79     19     10      2    70%   58-65, 78, 129-130, 132, 180, 194-278
+app/models.py          67      0      0      0   100%
+app/schemas.py         80      1      2      1    98%   77
+app/seed.py            24      0      0      0   100%
+app/service.py        135     16     44     13    84%   70, 116, 118, 120, 157, 185-186, 217-219, 249, 258, 264, 296, 298, 302, 325->340
+---------------------------------------------------------------
+TOTAL                 489     45     76     21    87%
+
+
+============================= 25 passed in 12.62s ==============================
